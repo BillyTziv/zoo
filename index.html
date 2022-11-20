@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <title>Zoo Game</title>
+
+    <style>
+        .zoo-cards .card {
+            max-width: 180px;
+        }
+
+        .zoo-cards .card img {
+            height: 100px;
+        }
+
+        .d-none {
+            display: none;
+        }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+
+        <!---------------------------------------------------------------
+            INITIALIZE THE GAME
+        ---------------------------------------------------------------->
+        <section v-if="game.status === 0">
+            <div class="container">
+
+                <h1 class="text-center mb-5">
+                    Welcome to the ZOO !
+                </h1>
+
+                <div class="form-group">
+                    <label for="meetupName">Name your team</label>
+                    <input v-model="game.team.name" type="text" class="form-control" id="meetupName" placeholder="1st Monthly meetup.." required>
+                </div>
+
+                <div class="form-group">
+                    <label for="meetupMembers">How many members your team have?</label>
+                    <input v-model="totalTeamMembers" type="number" class="form-control" id="meetupMembers" placeholder="eg. 10" required>
+                </div>
+
+                <div class="form-check mb-2">
+                    <input v-model="game.team.saveState" type="checkbox" class="form-check-input" id="saveGame">
+                    <label class="form-check-label" for="saveGame">Do you want to save the game?</label>
+                </div>
+
+                <div class="text-center">
+                    <button @click="registerTeam()" class="btn btn-primary text-center">Build the team</button>
+                </div>
+
+            </div>
+        </section>
+
+        <!---------------------------------------------------------------
+            BUILD YOUR TEAM
+        ---------------------------------------------------------------->
+        <section v-if="game.status === 1">
+            <div class="container">
+
+                <div v-for="(member, index) in game.team.members" :key="member" class="p-2">
+                    <div class="form-group">
+                        <label for="playerName_{{ index }}">Team Member #{{index}}</label>
+                        <input v-model="member.name" type="text" class="form-control" id="playerName_{{ index }}" placeholder="Player name.." required>
+                    </div>
+                </div>
+
+                <div class="text-center">
+                    <button @click="startGame()" type="submit" class="btn btn-primary text-center">Start</button>
+                </div>
+
+            </div>
+        </section>
+
+        <!---------------------------------------------------------------
+            PLAY THE GAME
+        ---------------------------------------------------------------->
+        <section v-if="game.status === 2">
+            <div class="container">
+
+                <h3 class="text-center mb-5">
+                    It is your turn, <strong>{{ game.team.members[currentPlayer].name }}</strong>
+                </h3>
+
+                <!-- Next Player Button -->
+                <div class="container mt-2">
+                    <div class="text-center">                
+                        
+                    </div>
+                </div>
+
+                <!-- End Game Button -->
+                <div class="container mt-2">
+                    <div class="text-center">
+                        <button v-if="currentPlayer === game.team.members.length-1" @click="endGame()" class="btn btn-success">Finish</button>
+                        <button v-else @click="nextPlayer()" class="btn btn-primary">Next Player</button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- List of Animals -->
+            <div class="zoo-cards d-flex flex-row flex-wrap justify-space-around align-items-start">
+                <div v-for="animal in game.animals" :key="animal.name" class="p-2">
+                    <div class="card">
+                        <img class="card-img-top" :src="animal.image" alt="Card image cap">
+                        <div class="card-body">
+                            <h5 class="card-title">{{ animal.name }}</h5>
+                            <p class="card-text">{{ animal.description }}</p>
+                            
+                            <button @click="voteAnimal( game.team.members[currentPlayer], animal )" class="btn btn-primary">Vote</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!---------------------------------------------------------------
+            RESULTS
+        ---------------------------------------------------------------->
+        <section v-if="game.status === 3">
+            <div class="container">
+
+                <h3 class="text-center mb-5">
+                    Team #<strong>{{ game.team.name }}</strong> Results
+                </h3>
+
+            </div>
+
+            <div class="zoo-cards d-flex flex-row flex-wrap justify-space-around align-items-start">
+                <div v-for="animal in game.animals" :key="animal" class="p-2" >
+                    <div v-if="animal.voted > 0" class="card">
+                        <img class="card-img-top" :src="animal.image" alt="Card image cap">
+                        <div class="card-body">
+                            <h5 class="card-title">{{ animal.name }}</h5>
+                            <p class="card-text">{{ animal.description }}</p>
+                            
+                            <h5>Voted by <strong>{{ animal.voted }}</strong></h5> 
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+    </div>
+
+    <script setup>        
+        const { createApp } = Vue;
+
+        // =============================
+        // GAME STATUS
+        //
+        // 0 - Initialize the team.
+        // 1 - Building the team.
+        // 2 - Game in progress.
+        // 3 - Game finished.
+
+        createApp({
+            data() {
+                return {
+                    currentPlayer: 0,           // Keep the current player ID.
+                    totalTeamMembers: 0,        // Keep the total number of the team members.
+                    game: {
+                        status: 0,              // Status of the game 0, 1, 2, 3
+                        team: {
+                            name: '',           // Name fo the team.
+                            members: [],        // List of team members.
+                            saveState: false
+                        },
+                        animals: [
+                            {
+                                name: "Lion",
+                                description: "You are extremly eficient.",
+                                image: "./animals/lion.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Peacock",
+                                description: "You know how to please anyone in all circumstances.",
+                                image: "./animals/peacock.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Penguin",
+                                description: "You adapt to whatever the context is.",
+                                image: "./animals/penguin.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Fish",
+                                description: "You know how to please anyone in all circumstances.",
+                                image: "./animals/fish.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Clown Fish",
+                                description: "You create possitive waves arround you.",
+                                image: "./animals/clown_fish.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Fox",
+                                description: "You enchant us with your ideas.",
+                                image: "./animals/fox.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Rhinocaros",
+                                description: "You are extremly eficient.",
+                                image: "./animals/rhinoceros.jpg",
+                                voted: 0
+                            },
+                            {
+                                name: "Parrot",
+                                description: "You adapt to whatever the context is.",
+                                image: "./animals/parrot.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Zebra",
+                                description: "You are always on the lookout for the latest trends.",
+                                image: "./animals/zebra.jpg",
+                                voted: 0
+                            },
+                            {
+                                name: "Velociraptor",
+                                description: "You are tenacious and remain focused on your objective.",
+                                image: "./animals/velociraptor.jpg",
+                                voted: 0
+                            },
+                            {
+                                name: "Eagle",
+                                description: "Your eye is on the detail. You seek perfection.",
+                                image: "./animals/eagle.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Whale",
+                                description: "You know everything about everthing.",
+                                image: "./animals/whale.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Blue Whale",
+                                description: "You are always well versed with innovative means of communication (twitter, instagram, etc)",
+                                image: "./animals/blue_whale.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Owl",
+                                description: "You know how to stay optimistic and possitive.",
+                                image: "./animals/owl.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Dolphin",
+                                description: "You always honour your commitments.",
+                                image: "./animals/dolphin.jpg",
+                                voted: 0
+                            },
+                            {
+                                name: "Squirrel",
+                                description: "You anticipate and make everything safe.",
+                                image: "./animals/squirrel.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Taurus",
+                                description: "You know how to defend your ideas with conviction.",
+                                image: "./animals/tauros.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Turtle",
+                                description: "You know how to listen to people with interest.",
+                                image: "./animals/turtle.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Leopard",
+                                description: "You move quickly into action.",
+                                image: "./animals/leopard.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Kangaroo",
+                                description: "You know how to get things done.",
+                                image: "./animals/kangaroo.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Frog",
+                                description: "You like to rethink things and explore.",
+                                image: "./animals/frog.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Giraffe",
+                                description: "You know how to see far and strategically.",
+                                image: "./animals/giraffe.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Flamigo",
+                                description: "You bring hapiness to everyone.",
+                                image: "./animals/flamigo.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Elephant",
+                                description: "You remember everything.",
+                                image: "./animals/elephant.webp",
+                                voted: 0
+                            },
+                            {
+                                name: "Octopus",
+                                description: "You can manage handling a lot of things at one.",
+                                image: "./animals/octopus.webp",
+                                voted: 0
+                            }
+                        ]
+                    },
+                    memberSchema: {
+                        id: null,
+                        name: '',
+                        animals: []
+                    }
+                }
+            },
+            methods: {
+                startGame() {
+                    this.setGameStatus( 2 );
+                },
+                endGame() {
+                    this.setGameStatus( 3 );
+                },
+                voteAnimal( member, animal ) {
+                    member.animals.push( animal );
+                    animal.voted++;
+                },
+                setGameStatus( status ) {
+                    this.game.status = status;
+                },
+                nextPlayer() {
+                    this.currentPlayer++;
+                },
+                registerTeam() {
+                    for (let index = 0; index < this.totalTeamMembers; index++) {
+                        // Create a new member with unique ID.
+                        let newMember = JSON.parse(JSON.stringify( this.memberSchema ));
+                        newMember.id = index;
+
+                        // Add the new member to the team mebers list.
+                        this.game.team.members.push( newMember );
+                    }
+                   
+                    this.setGameStatus( 1 );
+                }
+            }
+        }).mount('#app')
+    </script>
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+  </body>
+</html>
